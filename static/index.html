@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Claude Memory UI</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #21262d;
+    --border: #30363d;
+    --accent: #f78166;
+    --accent2: #79c0ff;
+    --accent3: #56d364;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --danger: #f85149;
+    --warn: #d29922;
+    --radius: 6px;
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+    --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 14px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── top bar ── */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  header h1 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--accent);
+    font-family: var(--font-mono);
+    letter-spacing: 0.5px;
+  }
+  header h1 span { color: var(--muted); }
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-left: 16px;
+  }
+  .tab {
+    padding: 5px 14px;
+    border-radius: var(--radius);
+    border: 1px solid transparent;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 13px;
+    font-family: var(--font-ui);
+    transition: all .15s;
+  }
+  .tab:hover { color: var(--text); background: var(--surface2); }
+  .tab.active {
+    color: var(--text);
+    background: var(--surface2);
+    border-color: var(--border);
+  }
+  .badge {
+    display: inline-block;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 10px;
+    border-radius: 10px;
+    padding: 1px 6px;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+  .spacer { flex: 1; }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent3);
+    flex-shrink: 0;
+  }
+
+  /* ── layout ── */
+  main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+  .pane {
+    display: none;
+    flex: 1;
+    overflow: hidden;
+  }
+  .pane.active { display: flex; }
+
+  /* ── sidebar + detail split ── */
+  .split {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+  .sidebar {
+    width: 300px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    background: var(--surface);
+  }
+  .detail {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── list items ── */
+  .list-header {
+    padding: 12px 14px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    z-index: 1;
+  }
+  .list-item {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background .1s;
+  }
+  .list-item:hover { background: var(--surface2); }
+  .list-item.selected { background: var(--surface2); border-left: 2px solid var(--accent2); }
+  .list-item-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .list-item-meta {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ── detail toolbar ── */
+  .detail-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  .detail-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .detail-title small { color: var(--muted); font-weight: 400; font-size: 11px; }
+  .btn {
+    padding: 5px 12px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 12px;
+    font-family: var(--font-ui);
+    transition: all .15s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .btn:hover { border-color: var(--accent2); color: var(--accent2); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #0d1117; font-weight: 600; }
+  .btn.primary:hover { opacity: 0.85; color: #0d1117; }
+  .btn.danger { border-color: var(--danger); color: var(--danger); }
+  .btn.danger:hover { background: var(--danger); color: #fff; }
+  .btn.success { border-color: var(--accent3); color: var(--accent3); }
+
+  /* ── editor ── */
+  .editor-wrap {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  textarea.editor {
+    flex: 1;
+    width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    border: none;
+    outline: none;
+    padding: 16px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    resize: none;
+    tab-size: 2;
+  }
+
+  /* ── markdown preview ── */
+  .preview {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+    background: var(--bg);
+  }
+  .preview h1, .preview h2, .preview h3 {
+    color: var(--accent2);
+    margin: 1em 0 0.4em;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 4px;
+  }
+  .preview h1 { font-size: 1.4em; }
+  .preview h2 { font-size: 1.2em; }
+  .preview h3 { font-size: 1.05em; color: var(--text); border: none; }
+  .preview p { margin: 0.5em 0; line-height: 1.7; color: var(--text); }
+  .preview code {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    color: var(--accent);
+  }
+  .preview pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    overflow-x: auto;
+    margin: 0.8em 0;
+  }
+  .preview pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--text);
+    font-size: 12px;
+  }
+  .preview ul, .preview ol { padding-left: 1.4em; margin: 0.5em 0; }
+  .preview li { margin: 0.25em 0; line-height: 1.6; }
+  .preview table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.8em 0;
+    font-size: 13px;
+  }
+  .preview th, .preview td {
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    text-align: left;
+  }
+  .preview th { background: var(--surface); color: var(--accent2); font-weight: 600; }
+  .preview td { color: var(--text); }
+  .preview a { color: var(--accent2); text-decoration: none; }
+  .preview blockquote {
+    border-left: 3px solid var(--accent);
+    margin: 0.5em 0;
+    padding: 4px 12px;
+    color: var(--muted);
+  }
+  .preview hr { border: none; border-top: 1px solid var(--border); margin: 1em 0; }
+
+  /* ── empty/placeholder ── */
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    gap: 8px;
+  }
+  .empty-state svg { opacity: 0.3; }
+  .empty-state p { font-size: 13px; }
+
+  /* ── projects pane ── */
+  .projects-grid {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 12px;
+    align-content: start;
+  }
+  .project-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: border-color .15s;
+  }
+  .project-card:hover { border-color: var(--accent2); }
+  .project-card.has-memory { border-left: 3px solid var(--accent3); }
+  .project-card h3 {
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: var(--accent2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 6px;
+  }
+  .project-card .meta-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .pill {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    background: var(--surface2);
+  }
+  .pill.green { border-color: var(--accent3); color: var(--accent3); }
+  .pill.blue { border-color: var(--accent2); color: var(--accent2); }
+  .project-card .preview-text {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.5;
+    font-family: var(--font-mono);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 60px;
+    overflow: hidden;
+  }
+  .project-card .actions {
+    margin-top: 10px;
+    display: flex;
+    gap: 6px;
+  }
+
+  /* ── session viewer ── */
+  .session-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px;
+    overflow-y: auto;
+    flex: 1;
+  }
+  .session-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: border-color .1s;
+  }
+  .session-item:hover { border-color: var(--accent2); }
+  .msg-bubble {
+    margin: 6px 0;
+    padding: 8px 12px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    line-height: 1.5;
+    max-width: 90%;
+    font-family: var(--font-mono);
+    word-break: break-word;
+  }
+  .msg-user { background: var(--surface2); border: 1px solid var(--border); align-self: flex-start; color: var(--accent2); }
+  .msg-assistant { background: #1a2636; border: 1px solid #1d3450; align-self: flex-end; color: var(--text); margin-left: auto; }
+  .msg-tool { background: #1a1f1a; border: 1px solid #2a3a2a; color: var(--muted); font-size: 11px; }
+  .messages-container { display: flex; flex-direction: column; padding: 12px; overflow-y: auto; flex: 1; gap: 4px; }
+  .msg-role { font-size: 10px; color: var(--muted); margin-bottom: 3px; font-weight: 600; text-transform: uppercase; }
+
+  /* ── settings ── */
+  .settings-wrap {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+  }
+  .settings-section h3 {
+    color: var(--accent2);
+    font-size: 13px;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .settings-kv {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 2px 12px;
+    margin-bottom: 16px;
+  }
+  .settings-key {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--accent);
+    padding: 5px 0;
+    align-self: start;
+  }
+  .settings-val {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text);
+    padding: 5px 8px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    word-break: break-all;
+    margin: 2px 0;
+  }
+  pre.json-view {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text);
+    overflow: auto;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  /* ── toast ── */
+  #toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 16px;
+    font-size: 13px;
+    z-index: 999;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all .2s;
+    pointer-events: none;
+    max-width: 300px;
+  }
+  #toast.show { opacity: 1; transform: translateY(0); }
+  #toast.ok { border-color: var(--accent3); color: var(--accent3); }
+  #toast.err { border-color: var(--danger); color: var(--danger); }
+
+  /* ── modal overlay for session viewer ── */
+  .overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  .overlay.open { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    width: 700px;
+    max-width: 95vw;
+    height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .modal-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .modal-header h3 { flex: 1; font-size: 13px; color: var(--accent2); font-family: var(--font-mono); }
+  .modal-close { background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; line-height: 1; padding: 0 4px; }
+  .modal-close:hover { color: var(--danger); }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+  .loading { color: var(--muted); font-size: 12px; padding: 20px; text-align: center; }
+  .view-toggle { display: flex; gap: 2px; }
+  .view-toggle .btn { padding: 4px 9px; font-size: 11px; }
+  .view-toggle .btn.active { border-color: var(--accent2); color: var(--accent2); }
+  .search-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: 12px;
+    padding: 4px 9px;
+    outline: none;
+    width: 160px;
+    font-family: var(--font-ui);
+  }
+  .search-box:focus { border-color: var(--accent2); }
+  .search-box::placeholder { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🧠 <span>claude</span>/memory-ui</h1>
+  <nav class="tabs">
+    <button class="tab active" onclick="switchTab('plans')">Plans <span class="badge" id="plans-count">…</span></button>
+    <button class="tab" onclick="switchTab('memory')">Memory <span class="badge" id="memory-count">…</span></button>
+    <button class="tab" onclick="switchTab('projects')">Projects <span class="badge" id="projects-count">…</span></button>
+    <button class="tab" onclick="switchTab('settings')">Settings</button>
+  </nav>
+  <span class="spacer"></span>
+  <span class="status-dot" title="API connected"></span>
+</header>
+
+<main>
+
+  <!-- ═══════════════ PLANS PANE ═══════════════ -->
+  <div class="pane active split" id="pane-plans">
+    <aside class="sidebar">
+      <div class="list-header">
+        Plans
+        <input class="search-box" style="float:right;width:100px;margin-top:-2px" placeholder="filter…" oninput="filterList(this,'plan-list')">
+      </div>
+      <div id="plan-list"></div>
+    </aside>
+    <div class="detail" id="plan-detail">
+      <div class="empty-state">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        <p>Select a plan to view or edit</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ MEMORY PANE ═══════════════ -->
+  <div class="pane split" id="pane-memory">
+    <aside class="sidebar">
+      <div class="list-header">
+        Project Memories
+        <input class="search-box" style="float:right;width:100px;margin-top:-2px" placeholder="filter…" oninput="filterList(this,'memory-list')">
+      </div>
+      <div id="memory-list"></div>
+    </aside>
+    <div class="detail" id="memory-detail">
+      <div class="empty-state">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+        <p>Select a project to view its MEMORY.md</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ PROJECTS PANE ═══════════════ -->
+  <div class="pane" id="pane-projects" style="flex-direction:column;">
+    <div class="detail-toolbar">
+      <span class="detail-title">All Projects</span>
+      <input class="search-box" placeholder="filter projects…" oninput="filterCards(this.value)">
+    </div>
+    <div class="projects-grid" id="projects-grid">
+      <div class="loading">Loading projects…</div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ SETTINGS PANE ═══════════════ -->
+  <div class="pane" id="pane-settings" style="flex-direction:column;">
+    <div class="detail-toolbar">
+      <span class="detail-title">Claude Settings <small>~/.claude/settings.json</small></span>
+    </div>
+    <div class="settings-wrap" id="settings-content">
+      <div class="loading">Loading…</div>
+    </div>
+  </div>
+
+</main>
+
+<!-- Session modal -->
+<div class="overlay" id="session-overlay" onclick="closeSessionModal(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="session-modal-title">Session</h3>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="messages-container" id="session-messages"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── state ──
+let plans = [];
+let projects = [];
+let selectedPlan = null;
+let selectedMemorySlug = null;
+let planViewMode = 'preview'; // 'edit' | 'preview'
+let memViewMode = 'preview';
+
+// ── tab switching ──
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active', ['plans','memory','projects','settings'][i] === name);
+  });
+  document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+  document.getElementById(`pane-${name}`).classList.add('active');
+  if (name === 'projects' && projects.length === 0) loadProjects();
+  if (name === 'settings') loadSettings();
+}
+
+// ── toast ──
+let toastTimer;
+function toast(msg, type='ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `show ${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.className = '', 2500);
+}
+
+// ── filter ──
+function filterList(input, listId) {
+  const q = input.value.toLowerCase();
+  document.querySelectorAll(`#${listId} .list-item`).forEach(item => {
+    item.style.display = item.dataset.search.includes(q) ? '' : 'none';
+  });
+}
+function filterCards(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('.project-card').forEach(card => {
+    card.style.display = card.dataset.search.includes(q) ? '' : 'none';
+  });
+}
+
+// ══════════════════════════════════════════════
+// PLANS
+// ══════════════════════════════════════════════
+async function loadPlans() {
+  const res = await fetch('/api/plans');
+  plans = await res.json();
+  document.getElementById('plans-count').textContent = plans.length;
+  renderPlanList();
+}
+
+function renderPlanList() {
+  const el = document.getElementById('plan-list');
+  el.innerHTML = plans.map(p => `
+    <div class="list-item" id="plan-item-${p.id}" data-search="${(p.title+p.filename).toLowerCase()}"
+         onclick="selectPlan('${p.id}')">
+      <div class="list-item-title">${escHtml(p.title)}</div>
+      <div class="list-item-meta">${p.filename} · ${fmtSize(p.size)} · ${fmtDate(p.modified)}</div>
+    </div>
+  `).join('');
+}
+
+async function selectPlan(id) {
+  selectedPlan = id;
+  document.querySelectorAll('#plan-list .list-item').forEach(el => {
+    el.classList.toggle('selected', el.id === `plan-item-${id}`);
+  });
+  const plan = plans.find(p => p.id === id);
+  const res = await fetch(`/api/plans/${id}`);
+  const data = await res.json();
+  renderPlanDetail(plan, data.content);
+}
+
+function renderPlanDetail(plan, content) {
+  const detail = document.getElementById('plan-detail');
+  detail.innerHTML = `
+    <div class="detail-toolbar">
+      <div class="detail-title">${escHtml(plan.title)}<br><small>${plan.filename} · ${fmtDate(plan.modified)}</small></div>
+      <div class="view-toggle">
+        <button class="btn ${planViewMode==='preview'?'active':''}" onclick="setPlanView('preview')">Preview</button>
+        <button class="btn ${planViewMode==='edit'?'active':''}" onclick="setPlanView('edit')">Edit</button>
+      </div>
+      <button class="btn primary" onclick="savePlan('${plan.id}')">Save</button>
+      <button class="btn danger" onclick="deletePlan('${plan.id}')">Delete</button>
+    </div>
+    <div class="editor-wrap">
+      <textarea class="editor" id="plan-editor" style="${planViewMode==='edit'?'':'display:none'}">${escHtml(content)}</textarea>
+      <div class="preview" id="plan-preview" style="${planViewMode==='preview'?'':'display:none'}">${renderMarkdown(content)}</div>
+    </div>
+  `;
+}
+
+function setPlanView(mode) {
+  planViewMode = mode;
+  const editor = document.getElementById('plan-editor');
+  const preview = document.getElementById('plan-preview');
+  if (!editor) return;
+  if (mode === 'edit') {
+    editor.style.display = '';
+    preview.style.display = 'none';
+  } else {
+    preview.innerHTML = renderMarkdown(editor.value);
+    editor.style.display = 'none';
+    preview.style.display = '';
+  }
+  document.querySelectorAll('.view-toggle .btn').forEach((b,i) => {
+    b.classList.toggle('active', (i===0 && mode==='preview') || (i===1 && mode==='edit'));
+  });
+}
+
+async function savePlan(id) {
+  const editor = document.getElementById('plan-editor');
+  const content = editor ? editor.value : document.getElementById('plan-preview')?.innerText || '';
+  if (!editor) { toast('Switch to Edit mode first', 'err'); return; }
+  const res = await fetch(`/api/plans/${id}`, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({content: editor.value})
+  });
+  if (res.ok) toast('Plan saved ✓');
+  else toast('Save failed', 'err');
+}
+
+async function deletePlan(id) {
+  if (!confirm('Delete this plan? This cannot be undone.')) return;
+  const res = await fetch(`/api/plans/${id}`, {method:'DELETE'});
+  if (res.ok) {
+    toast('Plan deleted');
+    plans = plans.filter(p => p.id !== id);
+    document.getElementById('plans-count').textContent = plans.length;
+    renderPlanList();
+    document.getElementById('plan-detail').innerHTML = '<div class="empty-state"><p>Plan deleted.</p></div>';
+  } else toast('Delete failed', 'err');
+}
+
+// ══════════════════════════════════════════════
+// MEMORY
+// ══════════════════════════════════════════════
+async function loadMemory() {
+  if (projects.length === 0) {
+    const res = await fetch('/api/projects');
+    projects = await res.json();
+  }
+  const withMem = projects.filter(p => p.has_memory);
+  document.getElementById('memory-count').textContent = withMem.length;
+
+  const el = document.getElementById('memory-list');
+  el.innerHTML = withMem.map(p => `
+    <div class="list-item" id="mem-item-${p.slug}" data-search="${p.path.toLowerCase()}"
+         onclick="selectMemory('${p.slug}')">
+      <div class="list-item-title">${fmtPath(p.path)}</div>
+      <div class="list-item-meta">${p.session_count} session${p.session_count!==1?'s':''}</div>
+    </div>
+  `).join('');
+}
+
+async function selectMemory(slug) {
+  selectedMemorySlug = slug;
+  document.querySelectorAll('#memory-list .list-item').forEach(el => {
+    el.classList.toggle('selected', el.id === `mem-item-${slug}`);
+  });
+  const res = await fetch(`/api/projects/${slug}/memory`);
+  if (!res.ok) { toast('Failed to load memory', 'err'); return; }
+  const data = await res.json();
+  const proj = projects.find(p => p.slug === slug);
+  renderMemoryDetail(slug, proj.path, data.content);
+}
+
+function renderMemoryDetail(slug, path, content) {
+  const detail = document.getElementById('memory-detail');
+  detail.innerHTML = `
+    <div class="detail-toolbar">
+      <div class="detail-title">${fmtPath(path)}<br><small>MEMORY.md</small></div>
+      <div class="view-toggle">
+        <button class="btn ${memViewMode==='preview'?'active':''}" onclick="setMemView('preview')">Preview</button>
+        <button class="btn ${memViewMode==='edit'?'active':''}" onclick="setMemView('edit')">Edit</button>
+      </div>
+      <button class="btn primary" onclick="saveMemory('${slug}')">Save</button>
+    </div>
+    <div class="editor-wrap">
+      <textarea class="editor" id="mem-editor" style="${memViewMode==='edit'?'':'display:none'}">${escHtml(content)}</textarea>
+      <div class="preview" id="mem-preview" style="${memViewMode==='preview'?'':'display:none'}">${renderMarkdown(content)}</div>
+    </div>
+  `;
+}
+
+function setMemView(mode) {
+  memViewMode = mode;
+  const editor = document.getElementById('mem-editor');
+  const preview = document.getElementById('mem-preview');
+  if (!editor) return;
+  if (mode === 'edit') {
+    editor.style.display = '';
+    preview.style.display = 'none';
+  } else {
+    preview.innerHTML = renderMarkdown(editor.value);
+    editor.style.display = 'none';
+    preview.style.display = '';
+  }
+  document.querySelectorAll('#memory-detail .view-toggle .btn').forEach((b,i) => {
+    b.classList.toggle('active', (i===0 && mode==='preview') || (i===1 && mode==='edit'));
+  });
+}
+
+async function saveMemory(slug) {
+  const editor = document.getElementById('mem-editor');
+  if (!editor) { toast('Switch to Edit mode first', 'err'); return; }
+  const res = await fetch(`/api/projects/${slug}/memory`, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({content: editor.value})
+  });
+  if (res.ok) toast('Memory saved ✓');
+  else toast('Save failed', 'err');
+}
+
+// ══════════════════════════════════════════════
+// PROJECTS
+// ══════════════════════════════════════════════
+async function loadProjects() {
+  const res = await fetch('/api/projects');
+  projects = await res.json();
+  document.getElementById('projects-count').textContent = projects.length;
+
+  // also update memory tab count
+  const withMem = projects.filter(p => p.has_memory).length;
+  document.getElementById('memory-count').textContent = withMem;
+
+  const grid = document.getElementById('projects-grid');
+  grid.innerHTML = projects.map(p => `
+    <div class="project-card ${p.has_memory?'has-memory':''}" data-search="${p.path.toLowerCase()}">
+      <h3 title="${escHtml(p.path)}">${fmtPath(p.path)}</h3>
+      <div class="meta-row">
+        <span class="pill blue">${p.session_count} session${p.session_count!==1?'s':''}</span>
+        ${p.has_memory ? `<span class="pill green">MEMORY.md</span>` : ''}
+      </div>
+      ${p.memory_preview ? `<div class="preview-text">${escHtml(p.memory_preview.split('\n').slice(0,4).join('\n'))}</div>` : ''}
+      <div class="actions">
+        ${p.has_memory ? `<button class="btn" onclick="jumpToMemory('${p.slug}')">View Memory</button>` : ''}
+        ${p.session_count > 0 ? `<button class="btn" onclick="showSessions('${p.slug}')">Sessions (${p.session_count})</button>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function jumpToMemory(slug) {
+  switchTab('memory');
+  setTimeout(() => {
+    if (document.getElementById('memory-list').children.length === 0) {
+      loadMemory().then(() => selectMemory(slug));
+    } else {
+      selectMemory(slug);
+    }
+  }, 100);
+}
+
+function showSessions(slug) {
+  const proj = projects.find(p => p.slug === slug);
+  if (!proj) return;
+  const overlay = document.getElementById('session-overlay');
+  const title = document.getElementById('session-modal-title');
+  const msgs = document.getElementById('session-messages');
+  title.textContent = fmtPath(proj.path);
+  msgs.innerHTML = `
+    <div style="padding:8px 0;color:var(--muted);font-size:12px;margin-bottom:8px">Click a session to view messages</div>
+    ${proj.sessions.map(s => `
+      <div class="session-item" onclick="loadSession('${slug}','${s.id}')">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-family:var(--font-mono);color:var(--accent2)">${s.id.substring(0,8)}…</span>
+          <span style="color:var(--muted)">${fmtDate(s.modified)}</span>
+        </div>
+        <div style="margin-top:4px;color:var(--muted)">${s.messages} messages · ${fmtSize(s.size)}</div>
+      </div>
+    `).join('')}
+  `;
+  overlay.classList.add('open');
+}
+
+async function loadSession(slug, sessionId) {
+  const msgs = document.getElementById('session-messages');
+  msgs.innerHTML = '<div class="loading">Loading session…</div>';
+  const res = await fetch(`/api/projects/${slug}/sessions/${sessionId}`);
+  if (!res.ok) { msgs.innerHTML = '<div class="loading">Failed to load session</div>'; return; }
+  const data = await res.json();
+
+  msgs.innerHTML = data.messages.filter(m => m.text).map(m => {
+    const cls = m.role === 'user' ? 'msg-user' : m.role === 'assistant' ? 'msg-assistant' : 'msg-tool';
+    return `
+      <div class="msg-bubble ${cls}">
+        <div class="msg-role">${m.role || m.type || '?'}</div>
+        ${escHtml(m.text || '')}
+      </div>
+    `;
+  }).join('');
+
+  if (msgs.children.length === 0) {
+    msgs.innerHTML = '<div class="loading">No readable messages</div>';
+  }
+}
+
+function closeSessionModal(e) {
+  if (e.target === document.getElementById('session-overlay')) closeModal();
+}
+function closeModal() {
+  document.getElementById('session-overlay').classList.remove('open');
+}
+
+// ══════════════════════════════════════════════
+// SETTINGS
+// ══════════════════════════════════════════════
+async function loadSettings() {
+  const res = await fetch('/api/settings');
+  const data = await res.json();
+  const el = document.getElementById('settings-content');
+  if (Object.keys(data).length === 0) {
+    el.innerHTML = '<p style="color:var(--muted);font-size:13px">No settings file found or it is empty.</p>';
+    return;
+  }
+  el.innerHTML = `<pre class="json-view">${escHtml(JSON.stringify(data, null, 2))}</pre>`;
+}
+
+// ══════════════════════════════════════════════
+// MARKDOWN (minimal)
+// ══════════════════════════════════════════════
+function renderMarkdown(text) {
+  let html = escHtml(text);
+  // code blocks
+  html = html.replace(/```[\w]*\n([\s\S]*?)```/g, (_,c) => `<pre><code>${c}</code></pre>`);
+  // inline code
+  html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  // headings
+  html = html.replace(/^#### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  // bold/italic
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  // horizontal rule
+  html = html.replace(/^---$/gm, '<hr>');
+  // blockquote
+  html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+  // tables (basic)
+  html = html.replace(/\|(.+)\|\n\|[-| :]+\|\n((?:\|.+\|\n?)+)/g, (_, header, body) => {
+    const ths = header.split('|').filter(c=>c.trim()).map(c=>`<th>${c.trim()}</th>`).join('');
+    const rows = body.trim().split('\n').map(row => {
+      const tds = row.split('|').filter(c=>c.trim()).map(c=>`<td>${c.trim()}</td>`).join('');
+      return `<tr>${tds}</tr>`;
+    }).join('');
+    return `<table><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table>`;
+  });
+  // unordered list
+  html = html.replace(/((?:^[-*] .+\n?)+)/gm, match => {
+    const items = match.trim().split('\n').map(l => `<li>${l.replace(/^[-*] /, '')}</li>`).join('');
+    return `<ul>${items}</ul>`;
+  });
+  // numbered list
+  html = html.replace(/((?:^\d+\. .+\n?)+)/gm, match => {
+    const items = match.trim().split('\n').map(l => `<li>${l.replace(/^\d+\. /, '')}</li>`).join('');
+    return `<ol>${items}</ol>`;
+  });
+  // links
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+  // paragraphs (double newlines)
+  html = html.replace(/\n{2,}/g, '</p><p>');
+  html = `<p>${html}</p>`;
+  // single newlines inside paragraphs
+  html = html.replace(/(?<!>)\n(?!<)/g, '<br>');
+  return html;
+}
+
+// ── utils ──
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmtSize(bytes) {
+  if (bytes < 1024) return bytes + 'B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + 'KB';
+  return (bytes/1024/1024).toFixed(1) + 'MB';
+}
+function fmtDate(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'});
+}
+function fmtPath(p) {
+  const parts = p.split('/').filter(Boolean);
+  return parts[parts.length-1] || p;
+}
+
+// ── init ──
+loadPlans().then(() => {
+  // pre-load project count for memory tab
+  fetch('/api/projects').then(r=>r.json()).then(data => {
+    projects = data;
+    document.getElementById('projects-count').textContent = data.length;
+    document.getElementById('memory-count').textContent = data.filter(p=>p.has_memory).length;
+  });
+});
+
+// memory pane lazy-loads
+document.querySelector('[onclick="switchTab(\'memory\')"]').addEventListener('click', () => {
+  if (document.getElementById('memory-list').children.length === 0) loadMemory();
+}, {capture: true});
+</script>
+</body>
+</html>

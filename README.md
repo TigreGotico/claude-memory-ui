@@ -6,6 +6,11 @@ A local web UI for viewing and managing [Claude Code](https://claude.ai/code) da
 
 ---
 
+> [!WARNING]
+> **100% vibe coded.** This entire project — backend, frontend, and the README you are reading right now — was generated in a single Claude Code session with zero human-written code. It works on the author's machine. It has no tests. The error handling is optimistic at best. The Markdown renderer in the frontend is a pile of regex. The slug-to-path decoder is documented as "best-effort" because it genuinely cannot do better. If something breaks, that's between you and the vibes. PRs welcome.
+
+---
+
 ## Features
 
 | Tab | What it does |
